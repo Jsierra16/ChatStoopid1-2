@@ -1,66 +1,127 @@
-using System; 
+using System;
 using System.Net;
-using System.Net.Sockets; 
+using System.Net.Sockets;
 using UnityEngine;
 
 public class TCPServer : MonoBehaviour
 {
-    private TcpListener tcpListener; // TCP server declaration
-    private TcpClient connectedClient; // Connected client declaration
-    private NetworkStream networkStream; // Network data stream
-    private byte[] receiveBuffer; // Buffer to store received data
+    private TcpListener tcpListener;
+    private TcpClient connectedClient;
+    private NetworkStream networkStream;
+    private byte[] receiveBuffer;
 
     public bool isServerRunning;
 
+    // Events for received data
+    public Action<string> OnTextReceived;
+    public Action<Texture2D> OnImageReceived;
+    public Action<byte[]> OnAudioReceived; // 🔥 Added for audio
+
     public void StartServer(int port)
     {
-        tcpListener = new TcpListener(IPAddress.Any, port); // Configures the TCP server to listen on any IP and the specified port
-        tcpListener.Start(); // Starts the TCP server
-        Debug.Log("Server started, waiting for connections..."); // Displays a message in the Unity console indicating that the server has started
-        tcpListener.BeginAcceptTcpClient(HandleIncomingConnection, null); // Begins asynchronously accepting clients
+        tcpListener = new TcpListener(IPAddress.Any, port);
+        tcpListener.Start();
+        Debug.Log("✅ Server started on port " + port);
+        tcpListener.BeginAcceptTcpClient(HandleIncomingConnection, null);
         isServerRunning = true;
     }
 
     private void HandleIncomingConnection(IAsyncResult result)
     {
-        connectedClient = tcpListener.EndAcceptTcpClient(result); // Completes client acceptance and establishes the connection
-        networkStream = connectedClient.GetStream(); // Retrieves the network data stream from the connected client
-        Debug.Log("Client connected: " + connectedClient.Client.RemoteEndPoint); // Displays a message in the console indicating that a client has connected
-        receiveBuffer = new byte[connectedClient.ReceiveBufferSize]; // Initializes the reception buffer with the client's buffer size
-        networkStream.BeginRead(receiveBuffer, 0, receiveBuffer.Length, ReceiveData, null); // Begins asynchronously reading data from the network stream
-        tcpListener.BeginAcceptTcpClient(HandleIncomingConnection, null); // Continues waiting for new client connections asynchronously
+        connectedClient = tcpListener.EndAcceptTcpClient(result);
+        networkStream = connectedClient.GetStream();
+        Debug.Log("🔗 Client connected: " + connectedClient.Client.RemoteEndPoint);
+
+        receiveBuffer = new byte[connectedClient.ReceiveBufferSize];
+        networkStream.BeginRead(receiveBuffer, 0, receiveBuffer.Length, ReceiveData, null);
+
+        // Continue accepting other clients
+        tcpListener.BeginAcceptTcpClient(HandleIncomingConnection, null);
     }
 
     private void ReceiveData(IAsyncResult result)
     {
-        int bytesRead = networkStream.EndRead(result); // Completes reading data from the network stream and gets the number of bytes read
-        
-        if (bytesRead <= 0) // If no bytes are read, the client has disconnected
+        int bytesRead = networkStream.EndRead(result);
+
+        if (bytesRead <= 0)
         {
-            Debug.Log("Client disconnected: " + connectedClient.Client.RemoteEndPoint); // Displays a message in the console indicating that the client has disconnected
-            connectedClient.Close(); // Closes the connection with the client
+            Debug.Log("❌ Client disconnected.");
+            connectedClient.Close();
             return;
         }
-        byte[] receivedBytes = new byte[bytesRead]; // Copies the received data into a new byte array
-        Array.Copy(receiveBuffer, receivedBytes, bytesRead);
-        string receivedMessage = System.Text.Encoding.UTF8.GetString(receivedBytes); // Converts the received bytes into a text message
-        Debug.Log("Received from client: " + receivedMessage); // Displays the received message in the console
-        networkStream.BeginRead(receiveBuffer, 0, receiveBuffer.Length, ReceiveData, null); // Continues reading data from the network stream asynchronously
+
+        int index = 0;
+        while (index < bytesRead)
+        {
+            byte type = receiveBuffer[index];
+            index++;
+
+            int length = BitConverter.ToInt32(receiveBuffer, index);
+            index += 4;
+
+            byte[] data = new byte[length];
+            Array.Copy(receiveBuffer, index, data, 0, length);
+            index += length;
+
+            if (type == 0) // Text
+            {
+                string message = System.Text.Encoding.UTF8.GetString(data);
+                Debug.Log("📩 Texto recibido: " + message);
+                OnTextReceived?.Invoke(message);
+            }
+            else if (type == 1) // Image
+            {
+                Texture2D tex = new Texture2D(2, 2);
+                tex.LoadImage(data);
+                Debug.Log("🖼️ Imagen recibida!");
+                OnImageReceived?.Invoke(tex);
+            }
+            else if (type == 2) // Audio
+            {
+                Debug.Log("🎵 Audio recibido (" + data.Length + " bytes)");
+                OnAudioReceived?.Invoke(data);
+            }
+        }
+
+        networkStream.BeginRead(receiveBuffer, 0, receiveBuffer.Length, ReceiveData, null);
     }
 
-    public void SendData(string message)
+    public void SendText(string message)
     {
-        try{
-            byte[] sendBytes = System.Text.Encoding.UTF8.GetBytes(message); // Converts the message into a byte array
-            networkStream.Write(sendBytes, 0, sendBytes.Length); // Writes the bytes to the network stream to send them to the client
-            networkStream.Flush(); // Clears the data stream to ensure data is sent
-            Debug.Log("Sent to client: " + message); // Displays a message in the console indicating that the message has been sent
-        }
-        catch{
-            Debug.Log("There is no client to send the message: " + message);
-        }
-        
+        if (networkStream == null) return;
+        byte[] data = System.Text.Encoding.UTF8.GetBytes(message);
+        SendDataWithType(0, data);
     }
 
-}
+    public void SendImage(Texture2D texture)
+    {
+        if (networkStream == null) return;
+        byte[] data = texture.EncodeToPNG();
+        SendDataWithType(1, data);
+    }
 
+    public void SendAudio(byte[] audioData) // 🔥 New
+    {
+        if (networkStream == null) return;
+        SendDataWithType(2, audioData);
+    }
+
+    private void SendDataWithType(byte type, byte[] data)
+    {
+        try
+        {
+            byte[] length = BitConverter.GetBytes(data.Length);
+            byte[] packet = new byte[1 + 4 + data.Length];
+            packet[0] = type;
+            Array.Copy(length, 0, packet, 1, 4);
+            Array.Copy(data, 0, packet, 5, data.Length);
+
+            networkStream.Write(packet, 0, packet.Length);
+            networkStream.Flush();
+        }
+        catch
+        {
+            Debug.Log("❌ Failed to send data.");
+        }
+    }
+}

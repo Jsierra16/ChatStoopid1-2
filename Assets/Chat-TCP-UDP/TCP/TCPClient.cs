@@ -1,49 +1,136 @@
 using System;
-using System.Net;
 using System.Net.Sockets;
 using UnityEngine;
 
 public class TCPClient : MonoBehaviour
 {
-    private TcpClient tcpClient; // TCP client to connect to the server
-    private NetworkStream networkStream; // Network data stream for sending and receiving data
-    private byte[] receiveBuffer; // Buffer to store the data received from the server
+    private TcpClient client;
+    private NetworkStream networkStream;
+    private byte[] receiveBuffer;
 
-    public bool isServerConnected;
+    public bool isConnected;
 
-    public void ConnectToServer(string ipAddress, int port)
+    // Events for received data
+    public Action<string> OnTextReceived;
+    public Action<Texture2D> OnImageReceived;
+    public Action<byte[]> OnAudioReceived; // 🔥 Added for audio
+
+    public void ConnectToServer(string ip, int port)
     {
-        tcpClient = new TcpClient(); // Initializes the TCP client
-        tcpClient.Connect(IPAddress.Parse(ipAddress), port); // Connects the client to the server using the given IP address and port
-        networkStream = tcpClient.GetStream(); // Gets the network data stream for communication with the server
-        receiveBuffer = new byte[tcpClient.ReceiveBufferSize]; // Initializes the receive buffer with the client's buffer size
-        networkStream.BeginRead(receiveBuffer, 0, receiveBuffer.Length, ReceiveData, null); // Starts reading data from the network stream asynchronously
-        isServerConnected = true;
+        try
+        {
+            client = new TcpClient();
+            client.Connect(ip, port);
+            networkStream = client.GetStream();
+            isConnected = true;
+
+            Debug.Log("✅ Connected to server: " + ip + ":" + port);
+
+            receiveBuffer = new byte[client.ReceiveBufferSize];
+            networkStream.BeginRead(receiveBuffer, 0, receiveBuffer.Length, ReceiveData, null);
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("❌ Connection failed: " + e.Message);
+        }
     }
 
     private void ReceiveData(IAsyncResult result)
     {
-        int bytesRead = networkStream.EndRead(result); // Completes the data reading from the network stream and gets the number of bytes read
-        byte[] receivedBytes = new byte[bytesRead]; // Copies the received data into a new byte array
-        Array.Copy(receiveBuffer, receivedBytes, bytesRead);
-        string receivedMessage = System.Text.Encoding.UTF8.GetString(receivedBytes); // Converts the received bytes into a text message
-        Debug.Log("Received from server: " + receivedMessage); // Displays the message received from the server in the console
-        networkStream.BeginRead(receiveBuffer, 0, receiveBuffer.Length, ReceiveData, null); // Continues reading data from the network stream asynchronously
+        if (networkStream == null) return;
+
+        int bytesRead = networkStream.EndRead(result);
+
+        if (bytesRead <= 0)
+        {
+            Debug.Log("⚠️ Disconnected from server.");
+            client.Close();
+            isConnected = false;
+            return;
+        }
+
+        int index = 0;
+        while (index < bytesRead)
+        {
+            byte type = receiveBuffer[index];
+            index++;
+
+            int length = BitConverter.ToInt32(receiveBuffer, index);
+            index += 4;
+
+            byte[] data = new byte[length];
+            Array.Copy(receiveBuffer, index, data, 0, length);
+            index += length;
+
+            if (type == 0) // Text
+            {
+                string message = System.Text.Encoding.UTF8.GetString(data);
+                Debug.Log("📩 Text from server: " + message);
+                OnTextReceived?.Invoke(message);
+            }
+            else if (type == 1) // Image
+            {
+                Texture2D tex = new Texture2D(2, 2);
+                tex.LoadImage(data);
+                Debug.Log("🖼️ Image from server!");
+                OnImageReceived?.Invoke(tex);
+            }
+            else if (type == 2) // Audio
+            {
+                Debug.Log("🎵 Audio from server (" + data.Length + " bytes)");
+                OnAudioReceived?.Invoke(data);
+            }
+        }
+
+        networkStream.BeginRead(receiveBuffer, 0, receiveBuffer.Length, ReceiveData, null);
     }
 
-    public void SendData(string message)
+    public void SendText(string message)
+    {
+        if (!isConnected || networkStream == null) return;
+        byte[] data = System.Text.Encoding.UTF8.GetBytes(message);
+        SendDataWithType(0, data);
+    }
+
+    public void SendImage(Texture2D texture)
+    {
+        if (!isConnected || networkStream == null) return;
+        byte[] data = texture.EncodeToPNG();
+        SendDataWithType(1, data);
+    }
+
+    public void SendAudio(byte[] audioData) // 🔥 New
+    {
+        if (!isConnected || networkStream == null) return;
+        SendDataWithType(2, audioData);
+    }
+
+    private void SendDataWithType(byte type, byte[] data)
     {
         try
         {
-            byte[] sendBytes = System.Text.Encoding.UTF8.GetBytes(message); // Converts the message into a byte array
-            networkStream.Write(sendBytes, 0, sendBytes.Length); // Writes the bytes to the network stream to send them to the client
-            networkStream.Flush(); // Clears the data stream to ensure data is sent
-            Debug.Log("Sent to client: " + message); // Displays a message in the console indicating that the message has been sent
+            byte[] length = BitConverter.GetBytes(data.Length);
+            byte[] packet = new byte[1 + 4 + data.Length];
+            packet[0] = type;
+            Array.Copy(length, 0, packet, 1, 4);
+            Array.Copy(data, 0, packet, 5, data.Length);
+
+            networkStream.Write(packet, 0, packet.Length);
+            networkStream.Flush();
         }
-        catch
+        catch (Exception e)
         {
-            Debug.Log("There is no client to send the message: " + message);
+            Debug.LogError("❌ Failed to send data: " + e.Message);
         }
     }
-}
 
+    public void Disconnect()
+    {
+        if (!isConnected) return;
+
+        networkStream?.Close();
+        client?.Close();
+        isConnected = false;
+        Debug.Log("🔌 Disconnected from server.");
+    }
+}

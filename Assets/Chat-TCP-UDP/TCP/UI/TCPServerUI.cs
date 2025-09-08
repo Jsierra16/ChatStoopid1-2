@@ -8,44 +8,144 @@ public class TCPServerUI : MonoBehaviour
     [SerializeField] private TCPServer _server;
     [SerializeField] private TMP_InputField messageInput;
 
-    [Header("UI References")]
-    [SerializeField] private TextMeshProUGUI chatOutput; // Place to show messages
+    [Header("Buttons")]
+    [SerializeField] private Button sendTextButton;
+    [SerializeField] private Button sendImageButton;
+    [SerializeField] private Button recordButton;
+    [SerializeField] private Button stopRecordButton;
 
-    public void SendServerMessage()
+    [Header("Chat UI")]
+    [SerializeField] private Transform chatContent;
+    [SerializeField] private GameObject textPrefab;
+    [SerializeField] private GameObject imagePrefab;
+    [SerializeField] private GameObject audioPrefab;
+    [SerializeField] private ScrollRect scrollRect;
+
+    [Header("Audio")]
+    [SerializeField] private AudioRecorder recorder;
+
+    private void Start()
     {
-        if (!_server.isServerRunning)
-        {
-            ShowMessage("⚠ The server is not running");
-            return;
-        }
+        // Assign buttons
+        sendTextButton.onClick.AddListener(SendServerMessage);
+        sendImageButton.onClick.AddListener(SendServerImage);
+        recordButton.onClick.AddListener(StartRecording);
+        stopRecordButton.onClick.AddListener(StopAndSendRecording);
 
-        if (string.IsNullOrEmpty(messageInput.text))
-        {
-            ShowMessage("⚠ The chat entry is empty");
-            return;
-        }
-
-        string message = messageInput.text;
-        _server.SendData(message);
-
-        // Show in UI
-        ShowMessage($"Server: {message}");
-
-        // Clear input field
-        messageInput.text = "";
+        // Subscribe to server events
+        _server.OnTextReceived += AddTextMessage;
+        _server.OnImageReceived += AddImageMessage;
+        _server.OnAudioReceived += AddAudioMessage;
     }
 
     public void StartServer()
     {
         _server.StartServer(serverPort);
-        ShowMessage("✅ Server started");
+        AddTextMessage("Servidor iniciado en puerto: " + serverPort);
     }
 
-    private void ShowMessage(string text)
+    #region --- Sending ---
+
+    public void SendServerMessage()
     {
-        if (chatOutput != null)
+        if (!_server.isServerRunning)
         {
-            chatOutput.text += text + "\n"; // Append new line
+            Debug.Log("The server is not running");
+            return;
+        }
+
+        if (string.IsNullOrEmpty(messageInput.text))
+        {
+            Debug.Log("The chat entry is empty");
+            return;
+        }
+
+        string message = messageInput.text;
+        _server.SendText(message);
+        AddTextMessage("Servidor: " + message);
+        messageInput.text = "";
+    }
+
+    public void SendServerImage()
+    {
+#if UNITY_EDITOR
+        if (!_server.isServerRunning) return;
+
+        string path = UnityEditor.EditorUtility.OpenFilePanel("Select image", "", "png,jpg");
+        if (string.IsNullOrEmpty(path)) return;
+
+        byte[] bytes = System.IO.File.ReadAllBytes(path);
+        Texture2D tex = new Texture2D(2, 2);
+        tex.LoadImage(bytes);
+
+        _server.SendImage(tex);
+        AddImageMessage(tex);
+#endif
+    }
+
+    public void StartRecording() => recorder.StartRecording();
+
+    public void StopAndSendRecording()
+    {
+        recorder.StopRecording();
+        byte[] audioData = recorder.GetRecordedData();
+        if (audioData != null)
+        {
+            _server.SendAudio(audioData);
+            CreateAudioMessage(recorder.BytesToAudioClip(audioData), "Servidor");
         }
     }
+
+    #endregion
+
+    #region --- Receiving ---
+
+    public void AddTextMessage(string message)
+    {
+        GameObject go = Instantiate(textPrefab, chatContent);
+        go.GetComponent<TMP_Text>().text = message;
+        ScrollToBottom();
+    }
+
+    public void AddImageMessage(Texture2D tex)
+    {
+        GameObject go = Instantiate(imagePrefab, chatContent);
+        go.GetComponent<RawImage>().texture = tex;
+        ScrollToBottom();
+    }
+
+    public void AddAudioMessage(byte[] audioData)
+    {
+        AudioClip clip = recorder.BytesToAudioClip(audioData);
+        CreateAudioMessage(clip, "Cliente");
+    }
+
+    #endregion
+
+    #region --- UI Helpers ---
+
+    private void CreateAudioMessage(AudioClip clip, string sender)
+    {
+        GameObject newMsg = Instantiate(audioPrefab, chatContent);
+        newMsg.GetComponentInChildren<TMP_Text>().text = sender + " (Audio)";
+        Button playButton = newMsg.GetComponentInChildren<Button>();
+        AudioSource audioSource = newMsg.GetComponent<AudioSource>();
+
+        audioSource.clip = clip;
+        playButton.onClick.AddListener(() =>
+        {
+            audioSource.Play();
+        });
+
+        ScrollToBottom();
+    }
+
+    private void ScrollToBottom()
+    {
+        Canvas.ForceUpdateCanvases();
+        scrollRect.verticalNormalizedPosition = 0f;
+        Canvas.ForceUpdateCanvases();
+    }
+
+    #endregion
 }
