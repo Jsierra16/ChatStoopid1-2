@@ -4,13 +4,14 @@ using UnityEngine.UI;
 
 public class TCPClientUI : MonoBehaviour
 {
+    // --- CONFIGURACIÓN DEL CLIENTE ---
     [Header("Client Settings")]
-    public string serverIP = "127.0.0.1";   // Default to localhost
-    public int serverPort = 5555;
+    public string serverIP = "127.0.0.1";   // Dirección IP del servidor (por defecto localhost)
+    public int serverPort = 5555;           // Puerto de conexión
+    [SerializeField] private TCPClient _client;          // Referencia al cliente TCP
+    [SerializeField] private TMP_InputField messageInput; // Campo de entrada de texto
 
-    [SerializeField] private TCPClient _client;
-    [SerializeField] private TMP_InputField messageInput;
-
+    // --- BOTONES DE LA UI ---
     [Header("Buttons")]
     [SerializeField] private Button connectButton;
     [SerializeField] private Button sendTextButton;
@@ -18,29 +19,34 @@ public class TCPClientUI : MonoBehaviour
     [SerializeField] private Button recordButton;
     [SerializeField] private Button stopRecordButton;
 
+    // --- ELEMENTOS DEL CHAT ---
     [Header("Chat UI")]
-    [SerializeField] private Transform chatContent;
-    [SerializeField] private GameObject textPrefab;
-    [SerializeField] private GameObject imagePrefab;
-    [SerializeField] private GameObject audioPrefab;
-    [SerializeField] private ScrollRect scrollRect;
+    [SerializeField] private Transform chatContent;   // Contenedor para los mensajes
+    [SerializeField] private GameObject textPrefab;   // Prefab para mensajes de texto
+    [SerializeField] private GameObject imagePrefab;  // Prefab para mensajes con imágenes
+    [SerializeField] private GameObject audioPrefab;  // Prefab para mensajes de audio
+    [SerializeField] private ScrollRect scrollRect;   // Scroll del chat
 
+    // --- AUDIO ---
     [Header("Audio")]
-    [SerializeField] private AudioRecorder recorder;
+    [SerializeField] private AudioRecorder recorder; // Grabador de audio
 
     private void Start()
     {
+        // Configuración de botones de UI → asocian acciones
         connectButton.onClick.AddListener(() => ConnectClient());
         sendTextButton.onClick.AddListener(SendClientMessage);
         sendImageButton.onClick.AddListener(SendClientImage);
         recordButton.onClick.AddListener(StartRecording);
         stopRecordButton.onClick.AddListener(StopAndSendRecording);
 
+        // Suscripción a eventos del cliente TCP → manejo de datos recibidos
         _client.OnTextReceived += (msg) => AddTextMessage("Servidor: " + msg);
         _client.OnImageReceived += (tex) => AddImageMessage(tex, "Servidor");
         _client.OnAudioReceived += (data) => AddAudioMessage(data, "Servidor");
     }
 
+    // --- CONEXIÓN AL SERVIDOR ---
     public void ConnectClient()
     {
         _client.ConnectToServer(serverIP, serverPort);
@@ -50,7 +56,9 @@ public class TCPClientUI : MonoBehaviour
     }
 
     #region --- Sending ---
+    // --- MÉTODOS PARA ENVIAR MENSAJES AL SERVIDOR ---
 
+    // Enviar texto
     public void SendClientMessage()
     {
         if (!_client.isConnected)
@@ -66,11 +74,12 @@ public class TCPClientUI : MonoBehaviour
         }
 
         string message = messageInput.text;
-        _client.SendText(message);
-        AddTextMessage("Cliente: " + message);
-        messageInput.text = "";
+        _client.SendText(message);                   // Enviar al servidor
+        AddTextMessage("Cliente: " + message);       // Mostrar en la UI
+        messageInput.text = "";                      // Limpiar campo
     }
 
+    // Enviar imagen (solo en el editor Unity)
     public void SendClientImage()
     {
 #if UNITY_EDITOR
@@ -88,6 +97,7 @@ public class TCPClientUI : MonoBehaviour
 #endif
     }
 
+    // Iniciar y detener grabación de audio
     public void StartRecording() => recorder.StartRecording();
 
     public void StopAndSendRecording()
@@ -96,14 +106,15 @@ public class TCPClientUI : MonoBehaviour
         byte[] audioData = recorder.GetRecordedData();
         if (audioData != null)
         {
-            _client.SendAudio(audioData);
-            CreateAudioMessage(recorder.BytesToAudioClip(audioData), "Cliente");
+            _client.SendAudio(audioData);                            // Enviar audio
+            CreateAudioMessage(recorder.BytesToAudioClip(audioData), // Mostrar en UI
+                               "Cliente");
         }
     }
-
     #endregion
 
     #region --- Receiving ---
+    // --- MÉTODOS PARA MOSTRAR MENSAJES RECIBIDOS ---
 
     public void AddTextMessage(string message)
     {
@@ -117,7 +128,7 @@ public class TCPClientUI : MonoBehaviour
         GameObject go = Instantiate(imagePrefab, chatContent);
         go.GetComponent<RawImage>().texture = tex;
 
-        // Optional: add a label above image
+        // Añadir etiqueta opcional con el remitente
         TMP_Text label = go.GetComponentInChildren<TMP_Text>();
         if (label != null) label.text = sender + " (Imagen)";
 
@@ -129,11 +140,12 @@ public class TCPClientUI : MonoBehaviour
         AudioClip clip = recorder.BytesToAudioClip(audioData);
         CreateAudioMessage(clip, sender);
     }
-
     #endregion
 
     #region --- UI Helpers ---
+    // --- MÉTODOS DE APOYO PARA LA INTERFAZ ---
 
+    // Crear un mensaje de audio en la UI con botón de reproducir
     private void CreateAudioMessage(AudioClip clip, string sender)
     {
         GameObject newMsg = Instantiate(audioPrefab, chatContent);
@@ -147,12 +159,12 @@ public class TCPClientUI : MonoBehaviour
         ScrollToBottom();
     }
 
+    // Mantener siempre el scroll en el último mensaje
     private void ScrollToBottom()
     {
         Canvas.ForceUpdateCanvases();
         scrollRect.verticalNormalizedPosition = 0f;
         Canvas.ForceUpdateCanvases();
     }
-
     #endregion
 }

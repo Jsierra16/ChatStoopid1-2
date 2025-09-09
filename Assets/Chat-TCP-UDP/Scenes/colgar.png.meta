@@ -197,7 +197,10 @@ TextureImporter:
     secondaryTextures: []
     spriteCustomMetadata:
       entries: []
-    nameFileIdTable: {}
+    nameFileIdTable:
+      colgar_0: -4647351598583013914
+      colgar_1: 2571045522137192412
+      colgar_2: -6097480629809405622
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 
