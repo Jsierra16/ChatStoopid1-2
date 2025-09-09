@@ -520,7 +520,8 @@ MonoBehaviour:
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_fontSharedMaterials: []
+  m_fontSharedMaterials:
+  - {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
   m_fontColor32:
@@ -892,7 +893,8 @@ MonoBehaviour:
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
-  m_fontSharedMaterials: []
+  m_fontSharedMaterials:
+  - {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_fontMaterial: {fileID: 0}
   m_fontMaterials: []
   m_fontColor32:
@@ -1030,7 +1032,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b982c929fa35c754d86db65bf1997f8a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  isServerConnected: 0
+  isConnected: 0
 --- !u!1 &1155689737
 GameObject:
   m_ObjectHideFlags: 0
@@ -1253,10 +1255,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5980256b8b131224ab5a9528d9474912, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  serverIP: 127.0.0.1
   serverPort: 5555
-  serverAddress: 127.0.0.1
   _client: {fileID: 1144782921}
   messageInput: {fileID: 1155689738}
+  connectButton: {fileID: 0}
+  sendTextButton: {fileID: 0}
+  sendImageButton: {fileID: 0}
+  recordButton: {fileID: 0}
+  stopRecordButton: {fileID: 0}
+  chatContent: {fileID: 0}
+  textPrefab: {fileID: 0}
+  imagePrefab: {fileID: 0}
+  audioPrefab: {fileID: 0}
+  scrollRect: {fileID: 0}
+  recorder: {fileID: 0}
 --- !u!1 &1436465545
 GameObject:
   m_ObjectHideFlags: 0

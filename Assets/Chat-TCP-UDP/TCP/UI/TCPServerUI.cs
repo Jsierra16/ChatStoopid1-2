@@ -26,16 +26,14 @@ public class TCPServerUI : MonoBehaviour
 
     private void Start()
     {
-        // Assign buttons
         sendTextButton.onClick.AddListener(SendServerMessage);
         sendImageButton.onClick.AddListener(SendServerImage);
         recordButton.onClick.AddListener(StartRecording);
         stopRecordButton.onClick.AddListener(StopAndSendRecording);
 
-        // Subscribe to server events
-        _server.OnTextReceived += AddTextMessage;
-        _server.OnImageReceived += AddImageMessage;
-        _server.OnAudioReceived += AddAudioMessage;
+        _server.OnTextReceived += (msg) => AddTextMessage("Cliente: " + msg);
+        _server.OnImageReceived += (tex) => AddImageMessage(tex, "Cliente");
+        _server.OnAudioReceived += (data) => AddAudioMessage(data, "Cliente");
     }
 
     public void StartServer()
@@ -79,7 +77,7 @@ public class TCPServerUI : MonoBehaviour
         tex.LoadImage(bytes);
 
         _server.SendImage(tex);
-        AddImageMessage(tex);
+        AddImageMessage(tex, "Servidor");
 #endif
     }
 
@@ -107,17 +105,21 @@ public class TCPServerUI : MonoBehaviour
         ScrollToBottom();
     }
 
-    public void AddImageMessage(Texture2D tex)
+    public void AddImageMessage(Texture2D tex, string sender)
     {
         GameObject go = Instantiate(imagePrefab, chatContent);
         go.GetComponent<RawImage>().texture = tex;
+
+        TMP_Text label = go.GetComponentInChildren<TMP_Text>();
+        if (label != null) label.text = sender + " (Imagen)";
+
         ScrollToBottom();
     }
 
-    public void AddAudioMessage(byte[] audioData)
+    public void AddAudioMessage(byte[] audioData, string sender)
     {
         AudioClip clip = recorder.BytesToAudioClip(audioData);
-        CreateAudioMessage(clip, "Cliente");
+        CreateAudioMessage(clip, sender);
     }
 
     #endregion

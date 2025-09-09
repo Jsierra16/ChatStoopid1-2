@@ -1,32 +1,42 @@
 using UnityEngine;
 using TMPro;
-using UnityEngine.UI;
 
-public class UdpClientUI: MonoBehaviour
+public class UdpClientUI : MonoBehaviour
 {
-    public int serverPort = 5555;
-    public string serverAddress = "127.0.0.1";
-    [SerializeField] private UDPClient _client;
-    [SerializeField] private TMP_InputField messageInput;
-    public void SendClientMessage()
+    public TMP_InputField ipInput;
+    public TMP_InputField portInput;
+    public TMP_InputField messageInput;
+
+    [SerializeField] private UDPProtocol udpClient;
+
+    private void Start()
     {
-        if(!_client.isServerConnected)
+        if (udpClient != null)
         {
-            Debug.Log("The client is not connected");
-            return;
+            udpClient.isServer = false; // this is the client
+            udpClient.OnConnected += () => Debug.Log("✅ UDP Client connected to server!");
+            udpClient.OnDataReceived += (msg) => Debug.Log("📩 From Server: " + msg);
         }
-
-        if(messageInput.text == ""){
-            Debug.Log("The chat entry is empty");
-            return;
-        }
-
-        string message = messageInput.text;
-        _client.SendData(message);
     }
 
     public void ConnectClient()
     {
-        _client.StartUDPClient(serverAddress, serverPort);
+        string ip = string.IsNullOrEmpty(ipInput.text) ? "127.0.0.1" : ipInput.text;
+        int port = int.TryParse(portInput.text, out int p) ? p : 5555;
+
+        udpClient.StartUDP(ip, port);
+        Debug.Log($"UDP Client started -> {ip}:{port}");
+    }
+
+    public void SendClientMessage()
+    {
+        if (udpClient != null && udpClient.isConnected)
+        {
+            udpClient.SendData(messageInput.text);
+        }
+        else
+        {
+            Debug.LogWarning("⚠️ Client not connected yet!");
+        }
     }
 }

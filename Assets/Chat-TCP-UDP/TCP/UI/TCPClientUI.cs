@@ -36,9 +36,9 @@ public class TCPClientUI : MonoBehaviour
         recordButton.onClick.AddListener(StartRecording);
         stopRecordButton.onClick.AddListener(StopAndSendRecording);
 
-        _client.OnTextReceived += AddTextMessage;
-        _client.OnImageReceived += AddImageMessage;
-        _client.OnAudioReceived += AddAudioMessage;
+        _client.OnTextReceived += (msg) => AddTextMessage("Servidor: " + msg);
+        _client.OnImageReceived += (tex) => AddImageMessage(tex, "Servidor");
+        _client.OnAudioReceived += (data) => AddAudioMessage(data, "Servidor");
     }
 
     public void ConnectClient()
@@ -84,7 +84,7 @@ public class TCPClientUI : MonoBehaviour
         tex.LoadImage(bytes);
 
         _client.SendImage(tex);
-        AddImageMessage(tex);
+        AddImageMessage(tex, "Cliente");
 #endif
     }
 
@@ -112,17 +112,22 @@ public class TCPClientUI : MonoBehaviour
         ScrollToBottom();
     }
 
-    public void AddImageMessage(Texture2D tex)
+    public void AddImageMessage(Texture2D tex, string sender)
     {
         GameObject go = Instantiate(imagePrefab, chatContent);
         go.GetComponent<RawImage>().texture = tex;
+
+        // Optional: add a label above image
+        TMP_Text label = go.GetComponentInChildren<TMP_Text>();
+        if (label != null) label.text = sender + " (Imagen)";
+
         ScrollToBottom();
     }
 
-    public void AddAudioMessage(byte[] audioData)
+    public void AddAudioMessage(byte[] audioData, string sender)
     {
         AudioClip clip = recorder.BytesToAudioClip(audioData);
-        CreateAudioMessage(clip, "Servidor");
+        CreateAudioMessage(clip, sender);
     }
 
     #endregion

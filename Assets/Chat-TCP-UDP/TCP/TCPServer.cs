@@ -15,7 +15,7 @@ public class TCPServer : MonoBehaviour
     // Events for received data
     public Action<string> OnTextReceived;
     public Action<Texture2D> OnImageReceived;
-    public Action<byte[]> OnAudioReceived; // 🔥 Added for audio
+    public Action<byte[]> OnAudioReceived;
 
     public void StartServer(int port)
     {
@@ -66,20 +66,31 @@ public class TCPServer : MonoBehaviour
             if (type == 0) // Text
             {
                 string message = System.Text.Encoding.UTF8.GetString(data);
-                Debug.Log("📩 Texto recibido: " + message);
-                OnTextReceived?.Invoke(message);
+                MainThreadDispatcher.Enqueue(() =>
+                {
+                    Debug.Log("📩 Texto recibido: " + message);
+                    OnTextReceived?.Invoke(message);
+                });
             }
             else if (type == 1) // Image
             {
-                Texture2D tex = new Texture2D(2, 2);
-                tex.LoadImage(data);
-                Debug.Log("🖼️ Imagen recibida!");
-                OnImageReceived?.Invoke(tex);
+                byte[] imgData = data;
+                MainThreadDispatcher.Enqueue(() =>
+                {
+                    Texture2D tex = new Texture2D(2, 2);
+                    tex.LoadImage(imgData);
+                    Debug.Log("🖼️ Imagen recibida!");
+                    OnImageReceived?.Invoke(tex);
+                });
             }
             else if (type == 2) // Audio
             {
-                Debug.Log("🎵 Audio recibido (" + data.Length + " bytes)");
-                OnAudioReceived?.Invoke(data);
+                byte[] audioData = data;
+                MainThreadDispatcher.Enqueue(() =>
+                {
+                    Debug.Log("🎵 Audio recibido (" + audioData.Length + " bytes)");
+                    OnAudioReceived?.Invoke(audioData);
+                });
             }
         }
 
@@ -100,7 +111,7 @@ public class TCPServer : MonoBehaviour
         SendDataWithType(1, data);
     }
 
-    public void SendAudio(byte[] audioData) // 🔥 New
+    public void SendAudio(byte[] audioData)
     {
         if (networkStream == null) return;
         SendDataWithType(2, audioData);
